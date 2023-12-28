@@ -14,7 +14,7 @@ func NewConn(factory MessageFactory, network net.Conn) Conn {
 	return Conn{factory, network}
 }
 
-func (c Conn) readMessage() (*Message, error) {
+func (c Conn) readMessage() (Message, error) {
 	prefix, prefixReadError := fullRead(c.network, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError

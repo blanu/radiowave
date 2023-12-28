@@ -5,5 +5,5 @@ type Message interface {
 }
 
 type MessageFactory interface {
-	FromBytes(bytes []byte) (*Message, error)
+	FromBytes(bytes []byte) (Message, error)
 }
