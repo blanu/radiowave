@@ -11,6 +11,10 @@ type File struct {
 	output  io.WriteCloser
 }
 
+func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser) File {
+	return File{factory, input, output}
+}
+
 // Messages are in a format consisting of a payload prefixed by a varint-encoded length.
 // Please note that there are multiple known formats for varint encoding.
 // The format used here is not the one from the Go standard library.
