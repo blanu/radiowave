@@ -23,7 +23,7 @@ func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser)
 // Please note that there are multiple known formats for varint encoding.
 // The format used here is not the one from the Go standard library.
 // This function reads messages from the resource's stdout
-func (f File) readMessage() (Message, error) {
+func (f File) ReadMessage() (Message, error) {
 	prefix, prefixReadError := fullReadFile(f.inputStream, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -54,7 +54,7 @@ func (f File) readMessage() (Message, error) {
 	return f.factory.FromBytes(completeMessage)
 }
 
-func (f File) writeMessage(message Message) error {
+func (f File) WriteMessage(message Message) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))

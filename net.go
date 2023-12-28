@@ -14,7 +14,7 @@ func NewConn(factory MessageFactory, network net.Conn) Conn {
 	return Conn{factory, network}
 }
 
-func (c Conn) readMessage() (Message, error) {
+func (c Conn) ReadMessage() (Message, error) {
 	prefix, prefixReadError := fullRead(c.network, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -45,7 +45,7 @@ func (c Conn) readMessage() (Message, error) {
 	return c.factory.FromBytes(completeMessage)
 }
 
-func (c Conn) writeMessage(conn net.Conn, message Message) error {
+func (c Conn) WriteMessage(conn net.Conn, message Message) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
