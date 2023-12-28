@@ -14,6 +14,16 @@ func NewConn(factory MessageFactory, network net.Conn) Conn {
 	return Conn{factory, network}
 }
 
+func Dial(factory MessageFactory, destination string) (*Conn, error) {
+	network, dialError := net.Dial("tcp", destination)
+	if dialError != nil {
+		return nil, dialError
+	}
+
+	wrapped := NewConn(factory, network)
+	return &wrapped, nil
+}
+
 func (c Conn) ReadMessage() (Message, error) {
 	prefix, prefixReadError := fullRead(c.network, 1)
 	if prefixReadError != nil {
