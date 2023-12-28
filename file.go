@@ -6,13 +6,17 @@ import (
 )
 
 type File struct {
-	factory MessageFactory
-	input   io.ReadCloser
-	output  io.WriteCloser
+	factory       MessageFactory
+	inputStream   io.ReadCloser
+	outputStream  io.WriteCloser
+	InputChannel  chan Message
+	OutputChannel chan Message
 }
 
 func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser) File {
-	return File{factory, input, output}
+	inputChannel := make(chan Message)
+	outputChannel := make(chan Message)
+	return File{factory, input, output, inputChannel, outputChannel}
 }
 
 // Messages are in a format consisting of a payload prefixed by a varint-encoded length.
@@ -20,13 +24,13 @@ func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser)
 // The format used here is not the one from the Go standard library.
 // This function reads messages from the resource's stdout
 func (f File) readMessage() (*Message, error) {
-	prefix, prefixReadError := fullReadFile(f.input, 1)
+	prefix, prefixReadError := fullReadFile(f.inputStream, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
 	}
 	varintCount := int(prefix[0])
 
-	compressedBuffer, compressedReadError := fullReadFile(f.input, varintCount)
+	compressedBuffer, compressedReadError := fullReadFile(f.inputStream, varintCount)
 	if compressedReadError != nil {
 		return nil, compressedReadError
 	}
@@ -37,7 +41,7 @@ func (f File) readMessage() (*Message, error) {
 	}
 
 	payloadCount := dataToInt(uncompressedBuffer)
-	payload, payloadReadError := fullReadFile(f.input, payloadCount)
+	payload, payloadReadError := fullReadFile(f.inputStream, payloadCount)
 	if payloadReadError != nil {
 		return nil, payloadReadError
 	}
@@ -71,7 +75,7 @@ func (f File) writeMessage(message Message) error {
 	completeMessage = append(completeMessage, compressedBuffer...)
 	completeMessage = append(completeMessage, payload...)
 
-	return fullWriteFile(f.output, completeMessage)
+	return fullWriteFile(f.outputStream, completeMessage)
 }
 
 // We need this to ensure that there are no short reads from the file.
