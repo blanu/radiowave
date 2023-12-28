@@ -11,12 +11,18 @@ type File struct {
 	outputStream  io.WriteCloser
 	InputChannel  chan Message
 	OutputChannel chan Message
+	CloseChannel  chan bool
 }
 
 func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser) File {
 	inputChannel := make(chan Message)
 	outputChannel := make(chan Message)
-	return File{factory, input, output, inputChannel, outputChannel}
+	closeChannel := make(chan bool)
+
+	file := File{factory, input, output, inputChannel, outputChannel, closeChannel}
+	go file.cleanup()
+
+	return file
 }
 
 // Messages are in a format consisting of a payload prefixed by a varint-encoded length.
@@ -108,4 +114,14 @@ func fullWriteFile(conn io.WriteCloser, message []byte) error {
 	}
 
 	return nil
+}
+
+func (f File) cleanup() {
+	<-f.CloseChannel
+
+	f.inputStream.Close()
+	f.outputStream.Close()
+	close(f.InputChannel)
+	close(f.OutputChannel)
+	close(f.CloseChannel)
 }

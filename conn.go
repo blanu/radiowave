@@ -8,10 +8,18 @@ import (
 type Conn struct {
 	factory MessageFactory
 	network net.Conn
+
+	InputChannel  chan Message
+	OutputChannel chan Message
+	CloseChannel  chan bool
 }
 
 func NewConn(factory MessageFactory, network net.Conn) Conn {
-	return Conn{factory, network}
+	inputChannel := make(chan Message)
+	outputChannel := make(chan Message)
+	closeChannel := make(chan bool)
+
+	return Conn{factory, network, inputChannel, outputChannel, closeChannel}
 }
 
 func Dial(factory MessageFactory, destination string) (*Conn, error) {
@@ -109,4 +117,14 @@ func fullWrite(conn net.Conn, message []byte) error {
 	}
 
 	return nil
+}
+
+func (c Conn) cleanup() {
+	<-c.CloseChannel
+
+	_ = c.network.Close()
+
+	close(c.InputChannel)
+	close(c.OutputChannel)
+	close(c.CloseChannel)
 }
