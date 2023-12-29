@@ -38,9 +38,16 @@ func Exec(factory MessageFactory, path string) (*Process, error) {
 	file := NewFile(factory, resourceOutput, resourceInput)
 	closeChannel := make(chan bool)
 	process := Process{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
+	go process.wait(resource)
 	go process.cleanup()
 
 	return &process, nil
+}
+
+func (p Process) wait(resource *exec.Cmd) {
+	resource.Wait()
+
+	p.CloseChannel <- true
 }
 
 func (p Process) cleanup() {

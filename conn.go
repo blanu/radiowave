@@ -33,13 +33,13 @@ func Dial(factory MessageFactory, destination string) (*Conn, error) {
 }
 
 func (c Conn) ReadMessage() (Message, error) {
-	prefix, prefixReadError := fullRead(c.network, 1)
+	prefix, prefixReadError := c.fullRead(c.network, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
 	}
 	varintCount := int(prefix[0])
 
-	compressedBuffer, compressedReadError := fullRead(c.network, varintCount)
+	compressedBuffer, compressedReadError := c.fullRead(c.network, varintCount)
 	if compressedReadError != nil {
 		return nil, compressedReadError
 	}
@@ -50,7 +50,7 @@ func (c Conn) ReadMessage() (Message, error) {
 	}
 
 	payloadCount := dataToInt(uncompressedBuffer)
-	payload, payloadReadError := fullRead(c.network, payloadCount)
+	payload, payloadReadError := c.fullRead(c.network, payloadCount)
 	if payloadReadError != nil {
 		return nil, payloadReadError
 	}
@@ -84,17 +84,18 @@ func (c Conn) WriteMessage(conn net.Conn, message Message) error {
 	completeMessage = append(completeMessage, compressedBuffer...)
 	completeMessage = append(completeMessage, payload...)
 
-	return fullWrite(c.network, completeMessage)
+	return c.fullWrite(c.network, completeMessage)
 }
 
 // We need this to ensure that there are no short reads from the connection.
-func fullRead(conn net.Conn, size int) ([]byte, error) {
+func (c Conn) fullRead(conn net.Conn, size int) ([]byte, error) {
 	buffer := make([]byte, size)
 
 	totalRead := 0
 	for totalRead < size {
 		numRead, readError := conn.Read(buffer)
 		if readError != nil {
+			c.CloseChannel <- true
 			return nil, readError
 		}
 
@@ -105,11 +106,12 @@ func fullRead(conn net.Conn, size int) ([]byte, error) {
 }
 
 // We need this to ensure that there are no short writes to the connection.
-func fullWrite(conn net.Conn, message []byte) error {
+func (c Conn) fullWrite(conn net.Conn, message []byte) error {
 	totalWritten := 0
 	for totalWritten < len(message) {
 		numWritten, writeError := conn.Write(message[totalWritten:])
 		if writeError != nil {
+			c.CloseChannel <- true
 			return writeError
 		}
 
