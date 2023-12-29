@@ -14,22 +14,28 @@ type Conn struct {
 	CloseChannel  chan bool
 }
 
-func NewConn(factory MessageFactory, network net.Conn) Conn {
-	inputChannel := make(chan Message)
-	outputChannel := make(chan Message)
-	closeChannel := make(chan bool)
-
-	return Conn{factory, network, inputChannel, outputChannel, closeChannel}
-}
-
 func Dial(factory MessageFactory, destination string) (*Conn, error) {
 	network, dialError := net.Dial("tcp", destination)
 	if dialError != nil {
 		return nil, dialError
 	}
 
-	wrapped := NewConn(factory, network)
+	wrapped := newConn(factory, network)
 	return &wrapped, nil
+}
+
+func newConn(factory MessageFactory, network net.Conn) Conn {
+	inputChannel := make(chan Message)
+	outputChannel := make(chan Message)
+	closeChannel := make(chan bool)
+
+	conn := Conn{factory, network, inputChannel, outputChannel, closeChannel}
+
+	go conn.pumpInputChannel()
+	go conn.pumpNetwork()
+	go conn.cleanup()
+
+	return conn
 }
 
 func (c Conn) ReadMessage() (Message, error) {
@@ -63,7 +69,7 @@ func (c Conn) ReadMessage() (Message, error) {
 	return c.factory.FromBytes(completeMessage)
 }
 
-func (c Conn) WriteMessage(conn net.Conn, message Message) error {
+func (c Conn) WriteMessage(message Message) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -119,6 +125,26 @@ func (c Conn) fullWrite(conn net.Conn, message []byte) error {
 	}
 
 	return nil
+}
+
+func (c Conn) pumpInputChannel() {
+	// Read all of the messages from the outside world
+	for wave := range c.InputChannel {
+		// We have a message from the outside world.
+		// Write it to the network.
+		c.WriteMessage(wave)
+	}
+}
+
+func (c Conn) pumpNetwork() {
+	for {
+		wave, readError := c.ReadMessage()
+		if readError != nil {
+			break
+		}
+
+		c.OutputChannel <- wave
+	}
 }
 
 func (c Conn) cleanup() {

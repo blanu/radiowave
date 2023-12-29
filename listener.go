@@ -25,6 +25,6 @@ func (l Listener) Accept() (*Conn, error) {
 		return nil, acceptError
 	}
 
-	conn := NewConn(l.factory, network)
+	conn := newConn(l.factory, network)
 	return &conn, nil
 }

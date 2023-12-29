@@ -20,6 +20,8 @@ func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser)
 	closeChannel := make(chan bool)
 
 	file := File{factory, input, output, inputChannel, outputChannel, closeChannel}
+	go file.pumpInputChannel()
+	go file.pumpOutputStream()
 	go file.cleanup()
 
 	return file
@@ -114,6 +116,26 @@ func fullWriteFile(conn io.WriteCloser, message []byte) error {
 	}
 
 	return nil
+}
+
+func (f File) pumpInputChannel() {
+	// Read all of the messages from the outside world
+	for wave := range f.InputChannel {
+		// We have a message from the outside world.
+		// Write it to the network.
+		f.WriteMessage(wave)
+	}
+}
+
+func (f File) pumpOutputStream() {
+	for {
+		wave, readError := f.ReadMessage()
+		if readError != nil {
+			break
+		}
+
+		f.OutputChannel <- wave
+	}
 }
 
 func (f File) cleanup() {
