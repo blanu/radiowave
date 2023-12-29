@@ -6,21 +6,21 @@ import (
 	"os"
 )
 
-type File[M Message] struct {
-	factory       MessageFactory[M]
+type File[Request Message, Response Message] struct {
+	factory       MessageFactory[Response]
 	inputStream   io.ReadCloser
 	outputStream  io.WriteCloser
-	InputChannel  chan M
-	OutputChannel chan M
+	InputChannel  chan Request
+	OutputChannel chan Response
 	CloseChannel  chan bool
 }
 
-func NewFile[M Message](factory MessageFactory[M], input io.ReadCloser, output io.WriteCloser) File[M] {
-	inputChannel := make(chan M)
-	outputChannel := make(chan M)
+func NewFile[Request Message, Response Message](factory MessageFactory[Response], input io.ReadCloser, output io.WriteCloser) File[Request, Response] {
+	inputChannel := make(chan Request)
+	outputChannel := make(chan Response)
 	closeChannel := make(chan bool)
 
-	file := File[M]{factory, input, output, inputChannel, outputChannel, closeChannel}
+	file := File[Request, Response]{factory, input, output, inputChannel, outputChannel, closeChannel}
 	go file.pumpInputChannel()
 	go file.pumpOutputStream()
 	go file.cleanup()
@@ -28,20 +28,20 @@ func NewFile[M Message](factory MessageFactory[M], input io.ReadCloser, output i
 	return file
 }
 
-func NewFileFromFd[M Message](factory MessageFactory[M], fd uintptr) File[M] {
+func NewFileFromFd[Request Message, Response Message](factory MessageFactory[Response], fd uintptr) File[Request, Response] {
 	f := os.NewFile(fd, "incoming")
 
-	return NewFile(factory, f, f)
+	return NewFile[Request, Response](factory, f, f)
 }
 
-func (f File[M]) Call(request M) M {
+func (f File[Request, Response]) Call(request Request) Response {
 	f.InputChannel <- request
 	response := <-f.OutputChannel
 
 	return response
 }
 
-func (f File[M]) Close() {
+func (f File[Request, Response]) Close() {
 	f.CloseChannel <- true
 }
 
@@ -50,7 +50,7 @@ func (f File[M]) Close() {
 // Please note that there are multiple known formats for varint encoding.
 // The format used here is not the one from the Go standard library.
 // This function reads messages from the resource's stdout
-func (f File[M]) readMessage() (*M, error) {
+func (f File[Request, Response]) readMessage() (*Response, error) {
 	prefix, prefixReadError := fullReadFile(f.inputStream, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -81,7 +81,7 @@ func (f File[M]) readMessage() (*M, error) {
 	return f.factory.FromBytes(completeMessage)
 }
 
-func (f File[M]) writeMessage(message M) error {
+func (f File[Request, Response]) writeMessage(message Request) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -137,7 +137,7 @@ func fullWriteFile(conn io.WriteCloser, message []byte) error {
 	return nil
 }
 
-func (f File[M]) pumpInputChannel() {
+func (f File[Request, Response]) pumpInputChannel() {
 	// Read all the messages from the outside world
 	for wave := range f.InputChannel {
 		// We have a message from the outside world.
@@ -149,7 +149,7 @@ func (f File[M]) pumpInputChannel() {
 	}
 }
 
-func (f File[M]) pumpOutputStream() {
+func (f File[Request, Response]) pumpOutputStream() {
 	for {
 		wave, readError := f.readMessage()
 		if readError != nil {
@@ -160,7 +160,7 @@ func (f File[M]) pumpOutputStream() {
 	}
 }
 
-func (f File[M]) cleanup() {
+func (f File[Request, Response]) cleanup() {
 	<-f.CloseChannel
 
 	_ = f.inputStream.Close()

@@ -5,31 +5,31 @@ import (
 	"net"
 )
 
-type Conn[M Message] struct {
-	factory MessageFactory[M]
+type Conn[Request Message, Response Message] struct {
+	factory MessageFactory[Response]
 	network net.Conn
 
-	InputChannel  chan M
-	OutputChannel chan M
+	InputChannel  chan Request
+	OutputChannel chan Response
 	CloseChannel  chan bool
 }
 
-func Dial[M Message](factory MessageFactory[M], destination string) (*Conn[M], error) {
+func Dial[Request Message, Response Message](factory MessageFactory[Response], destination string) (*Conn[Request, Response], error) {
 	network, dialError := net.Dial("tcp", destination)
 	if dialError != nil {
 		return nil, dialError
 	}
 
-	wrapped := newConn[M](factory, network)
+	wrapped := newConn[Request, Response](factory, network)
 	return &wrapped, nil
 }
 
-func newConn[M Message](factory MessageFactory[M], network net.Conn) Conn[M] {
-	inputChannel := make(chan M)
-	outputChannel := make(chan M)
+func newConn[Request Message, Response Message](factory MessageFactory[Response], network net.Conn) Conn[Request, Response] {
+	inputChannel := make(chan Request)
+	outputChannel := make(chan Response)
 	closeChannel := make(chan bool)
 
-	conn := Conn[M]{factory, network, inputChannel, outputChannel, closeChannel}
+	conn := Conn[Request, Response]{factory, network, inputChannel, outputChannel, closeChannel}
 
 	go conn.pumpInputChannel()
 	go conn.pumpNetwork()
@@ -38,18 +38,18 @@ func newConn[M Message](factory MessageFactory[M], network net.Conn) Conn[M] {
 	return conn
 }
 
-func (c Conn[M]) Call(request M) M {
+func (c Conn[Request, Response]) Call(request Request) Response {
 	c.InputChannel <- request
 	response := <-c.OutputChannel
 
 	return response
 }
 
-func (c Conn[M]) Close() {
+func (c Conn[Request, Response]) Close() {
 	c.CloseChannel <- true
 }
 
-func (c Conn[M]) readMessage() (*M, error) {
+func (c Conn[Request, Response]) readMessage() (*Response, error) {
 	prefix, prefixReadError := c.fullRead(c.network, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -80,7 +80,7 @@ func (c Conn[M]) readMessage() (*M, error) {
 	return c.factory.FromBytes(completeMessage)
 }
 
-func (c Conn[M]) writeMessage(message Message) error {
+func (c Conn[Request, Response]) writeMessage(message Request) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -105,7 +105,7 @@ func (c Conn[M]) writeMessage(message Message) error {
 }
 
 // We need this to ensure that there are no short reads from the connection.
-func (c Conn[M]) fullRead(conn net.Conn, size int) ([]byte, error) {
+func (c Conn[Request, Response]) fullRead(conn net.Conn, size int) ([]byte, error) {
 	buffer := make([]byte, size)
 
 	totalRead := 0
@@ -123,7 +123,7 @@ func (c Conn[M]) fullRead(conn net.Conn, size int) ([]byte, error) {
 }
 
 // We need this to ensure that there are no short writes to the connection.
-func (c Conn[M]) fullWrite(conn net.Conn, message []byte) error {
+func (c Conn[Request, Response]) fullWrite(conn net.Conn, message []byte) error {
 	totalWritten := 0
 	for totalWritten < len(message) {
 		numWritten, writeError := conn.Write(message[totalWritten:])
@@ -138,7 +138,7 @@ func (c Conn[M]) fullWrite(conn net.Conn, message []byte) error {
 	return nil
 }
 
-func (c Conn[M]) pumpInputChannel() {
+func (c Conn[Request, Response]) pumpInputChannel() {
 	// Read all the messages from the outside world.
 	for wave := range c.InputChannel {
 		// We have a message from the outside world.
@@ -150,7 +150,7 @@ func (c Conn[M]) pumpInputChannel() {
 	}
 }
 
-func (c Conn[M]) pumpNetwork() {
+func (c Conn[Request, Response]) pumpNetwork() {
 	for {
 		wave, readError := c.readMessage()
 		if readError != nil {
@@ -161,7 +161,7 @@ func (c Conn[M]) pumpNetwork() {
 	}
 }
 
-func (c Conn[M]) cleanup() {
+func (c Conn[Request, Response]) cleanup() {
 	<-c.CloseChannel
 
 	_ = c.network.Close()

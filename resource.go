@@ -1,6 +1,6 @@
 package radiowave
 
-type Resource[M Message] interface {
-	Call(M) M
+type Resource[Request Message, Response Message] interface {
+	Call(Request) Response
 	Close()
 }

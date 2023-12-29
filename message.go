@@ -4,6 +4,6 @@ type Message interface {
 	ToBytes() []byte
 }
 
-type MessageFactory[M Message] interface {
-	FromBytes(bytes []byte) (*M, error)
+type MessageFactory[Response Message] interface {
+	FromBytes(bytes []byte) (*Response, error)
 }

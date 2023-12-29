@@ -6,18 +6,18 @@ import (
 	"os/exec"
 )
 
-type Process[M Message] struct {
-	factory MessageFactory[M]
+type Process[Request Message, Response Message] struct {
+	factory MessageFactory[Response]
 	cancel  context.CancelFunc
-	file    File[M]
+	file    File[Request, Response]
 
-	InputChannel  chan M
-	OutputChannel chan M
+	InputChannel  chan Request
+	OutputChannel chan Response
 	CloseChannel  chan bool
 }
 
 // Exec attempts to start the resource as a separate process connected to us through stdin/stdout
-func Exec[M Message](factory MessageFactory[M], path string) (*Process[M], error) {
+func Exec[Request Message, Response Message](factory MessageFactory[Response], path string) (*Process[Request, Response], error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resource := exec.CommandContext(ctx, path)
 	resourceInput, inputError := resource.StdinPipe()
@@ -35,33 +35,33 @@ func Exec[M Message](factory MessageFactory[M], path string) (*Process[M], error
 		return nil, errors.New("resource could not be started")
 	}
 
-	file := NewFile(factory, resourceOutput, resourceInput)
+	file := NewFile[Request, Response](factory, resourceOutput, resourceInput)
 	closeChannel := make(chan bool)
-	process := Process[M]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
+	process := Process[Request, Response]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
 	go process.wait(resource)
 	go process.cleanup()
 
 	return &process, nil
 }
 
-func (c Process[M]) Call(request M) M {
-	c.InputChannel <- request
-	response := <-c.OutputChannel
+func (p Process[Request, Response]) Call(request Request) Response {
+	p.InputChannel <- request
+	response := <-p.OutputChannel
 
 	return response
 }
 
-func (c Process[M]) Close() {
-	c.CloseChannel <- true
+func (p Process[Request, Response]) Close() {
+	p.CloseChannel <- true
 }
 
-func (p Process[M]) wait(resource *exec.Cmd) {
+func (p Process[Request, Response]) wait(resource *exec.Cmd) {
 	_ = resource.Wait()
 
 	p.CloseChannel <- true
 }
 
-func (p Process[M]) cleanup() {
+func (p Process[Request, Response]) cleanup() {
 	<-p.CloseChannel
 
 	p.cancel()
