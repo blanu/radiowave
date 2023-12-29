@@ -27,12 +27,23 @@ func NewFile[M Message](factory MessageFactory[M], input io.ReadCloser, output i
 	return file
 }
 
-// ReadMessage reads a message from the associated file.
+func (c File[M]) Call(request M) M {
+	c.InputChannel <- request
+	response := <-c.OutputChannel
+
+	return response
+}
+
+func (c File[M]) Close() {
+	c.CloseChannel <- true
+}
+
+// readMessage reads a message from the associated file.
 // Messages are in a format consisting of a payload prefixed by a varint-encoded length.
 // Please note that there are multiple known formats for varint encoding.
 // The format used here is not the one from the Go standard library.
 // This function reads messages from the resource's stdout
-func (f File[M]) ReadMessage() (*M, error) {
+func (f File[M]) readMessage() (*M, error) {
 	prefix, prefixReadError := fullReadFile(f.inputStream, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -63,7 +74,7 @@ func (f File[M]) ReadMessage() (*M, error) {
 	return f.factory.FromBytes(completeMessage)
 }
 
-func (f File[M]) WriteMessage(message M) error {
+func (f File[M]) writeMessage(message M) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -124,7 +135,7 @@ func (f File[M]) pumpInputChannel() {
 	for wave := range f.InputChannel {
 		// We have a message from the outside world.
 		// Write it to the network.
-		writeError := f.WriteMessage(wave)
+		writeError := f.writeMessage(wave)
 		if writeError != nil {
 			break
 		}
@@ -133,7 +144,7 @@ func (f File[M]) pumpInputChannel() {
 
 func (f File[M]) pumpOutputStream() {
 	for {
-		wave, readError := f.ReadMessage()
+		wave, readError := f.readMessage()
 		if readError != nil {
 			break
 		}

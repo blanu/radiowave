@@ -38,7 +38,18 @@ func newConn[M Message](factory MessageFactory[M], network net.Conn) Conn[M] {
 	return conn
 }
 
-func (c Conn[M]) ReadMessage() (*M, error) {
+func (c Conn[M]) Call(request M) M {
+	c.InputChannel <- request
+	response := <-c.OutputChannel
+
+	return response
+}
+
+func (c Conn[M]) Close() {
+	c.CloseChannel <- true
+}
+
+func (c Conn[M]) readMessage() (*M, error) {
 	prefix, prefixReadError := c.fullRead(c.network, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -69,7 +80,7 @@ func (c Conn[M]) ReadMessage() (*M, error) {
 	return c.factory.FromBytes(completeMessage)
 }
 
-func (c Conn[M]) WriteMessage(message Message) error {
+func (c Conn[M]) writeMessage(message Message) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -132,7 +143,7 @@ func (c Conn[M]) pumpInputChannel() {
 	for wave := range c.InputChannel {
 		// We have a message from the outside world.
 		// Write it to the network.
-		writeError := c.WriteMessage(wave)
+		writeError := c.writeMessage(wave)
 		if writeError != nil {
 			break
 		}
@@ -141,7 +152,7 @@ func (c Conn[M]) pumpInputChannel() {
 
 func (c Conn[M]) pumpNetwork() {
 	for {
-		wave, readError := c.ReadMessage()
+		wave, readError := c.readMessage()
 		if readError != nil {
 			break
 		}

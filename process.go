@@ -44,6 +44,17 @@ func Exec[M Message](factory MessageFactory[M], path string) (*Process[M], error
 	return &process, nil
 }
 
+func (c Process[M]) Call(request M) M {
+	c.InputChannel <- request
+	response := <-c.OutputChannel
+
+	return response
+}
+
+func (c Process[M]) Close() {
+	c.CloseChannel <- true
+}
+
 func (p Process[M]) wait(resource *exec.Cmd) {
 	_ = resource.Wait()
 
