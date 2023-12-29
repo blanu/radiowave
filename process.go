@@ -44,11 +44,19 @@ func Exec[Request Message, Response Message](factory MessageFactory[Response], p
 	return &process, nil
 }
 
-func (p Process[Request, Response]) Call(request Request) Response {
+func (p Process[Request, Response]) Write(request Request) {
 	p.InputChannel <- request
+}
+
+func (p Process[Request, Response]) Read() Response {
 	response := <-p.OutputChannel
 
 	return response
+}
+
+func (p Process[Request, Response]) Call(request Request) Response {
+	p.Write(request)
+	return p.Read()
 }
 
 func (p Process[Request, Response]) Close() {

@@ -34,13 +34,20 @@ func NewFileFromFd[Request Message, Response Message](factory MessageFactory[Res
 	return NewFile[Request, Response](factory, f, f)
 }
 
-func (f File[Request, Response]) Call(request Request) Response {
+func (f File[Request, Response]) Write(request Request) {
 	f.InputChannel <- request
+}
+
+func (f File[Request, Response]) Read() Response {
 	response := <-f.OutputChannel
 
 	return response
 }
 
+func (f File[Request, Response]) Call(request Request) Response {
+	f.Write(request)
+	return f.Read()
+}
 func (f File[Request, Response]) Close() {
 	f.CloseChannel <- true
 }

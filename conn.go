@@ -38,11 +38,19 @@ func newConn[Request Message, Response Message](factory MessageFactory[Response]
 	return conn
 }
 
-func (c Conn[Request, Response]) Call(request Request) Response {
+func (c Conn[Request, Response]) Write(request Request) {
 	c.InputChannel <- request
+}
+
+func (c Conn[Request, Response]) Read() Response {
 	response := <-c.OutputChannel
 
 	return response
+}
+
+func (c Conn[Request, Response]) Call(request Request) Response {
+	c.Write(request)
+	return c.Read()
 }
 
 func (c Conn[Request, Response]) Close() {
