@@ -3,6 +3,7 @@ package radiowave
 import (
 	"encoding/binary"
 	"io"
+	"os"
 )
 
 type File[M Message] struct {
@@ -27,15 +28,21 @@ func NewFile[M Message](factory MessageFactory[M], input io.ReadCloser, output i
 	return file
 }
 
-func (c File[M]) Call(request M) M {
-	c.InputChannel <- request
-	response := <-c.OutputChannel
+func NewFileFromFd[M Message](factory MessageFactory[M], fd uintptr) File[M] {
+	f := os.NewFile(fd, "incoming")
+
+	return NewFile(factory, f, f)
+}
+
+func (f File[M]) Call(request M) M {
+	f.InputChannel <- request
+	response := <-f.OutputChannel
 
 	return response
 }
 
-func (c File[M]) Close() {
-	c.CloseChannel <- true
+func (f File[M]) Close() {
+	f.CloseChannel <- true
 }
 
 // readMessage reads a message from the associated file.
