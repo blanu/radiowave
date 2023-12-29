@@ -4,22 +4,22 @@ import (
 	"net"
 )
 
-type Listener struct {
-	factory MessageFactory
+type Listener[M Message] struct {
+	factory MessageFactory[M]
 	network net.Listener
 }
 
-func Listen(factory MessageFactory, source string) (*Listener, error) {
+func Listen[M Message](factory MessageFactory[M], source string) (*Listener[M], error) {
 	network, listenError := net.Listen("tcp", source)
 	if listenError != nil {
 		return nil, listenError
 	}
 
-	listener := Listener{factory, network}
+	listener := Listener[M]{factory, network}
 	return &listener, nil
 }
 
-func (l Listener) Accept() (*Conn, error) {
+func (l Listener[M]) Accept() (*Conn[M], error) {
 	network, acceptError := l.network.Accept()
 	if acceptError != nil {
 		return nil, acceptError

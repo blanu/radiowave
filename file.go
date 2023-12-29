@@ -5,21 +5,21 @@ import (
 	"io"
 )
 
-type File struct {
-	factory       MessageFactory
+type File[M Message] struct {
+	factory       MessageFactory[M]
 	inputStream   io.ReadCloser
 	outputStream  io.WriteCloser
-	InputChannel  chan Message
-	OutputChannel chan Message
+	InputChannel  chan M
+	OutputChannel chan M
 	CloseChannel  chan bool
 }
 
-func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser) File {
-	inputChannel := make(chan Message)
-	outputChannel := make(chan Message)
+func NewFile[M Message](factory MessageFactory[M], input io.ReadCloser, output io.WriteCloser) File[M] {
+	inputChannel := make(chan M)
+	outputChannel := make(chan M)
 	closeChannel := make(chan bool)
 
-	file := File{factory, input, output, inputChannel, outputChannel, closeChannel}
+	file := File[M]{factory, input, output, inputChannel, outputChannel, closeChannel}
 	go file.pumpInputChannel()
 	go file.pumpOutputStream()
 	go file.cleanup()
@@ -27,11 +27,12 @@ func NewFile(factory MessageFactory, input io.ReadCloser, output io.WriteCloser)
 	return file
 }
 
+// ReadMessage reads a message from the associated file.
 // Messages are in a format consisting of a payload prefixed by a varint-encoded length.
 // Please note that there are multiple known formats for varint encoding.
 // The format used here is not the one from the Go standard library.
 // This function reads messages from the resource's stdout
-func (f File) ReadMessage() (Message, error) {
+func (f File[M]) ReadMessage() (*M, error) {
 	prefix, prefixReadError := fullReadFile(f.inputStream, 1)
 	if prefixReadError != nil {
 		return nil, prefixReadError
@@ -62,7 +63,7 @@ func (f File) ReadMessage() (Message, error) {
 	return f.factory.FromBytes(completeMessage)
 }
 
-func (f File) WriteMessage(message Message) error {
+func (f File[M]) WriteMessage(message M) error {
 	payload := message.ToBytes()
 
 	length := uint64(len(payload))
@@ -118,31 +119,34 @@ func fullWriteFile(conn io.WriteCloser, message []byte) error {
 	return nil
 }
 
-func (f File) pumpInputChannel() {
-	// Read all of the messages from the outside world
+func (f File[M]) pumpInputChannel() {
+	// Read all the messages from the outside world
 	for wave := range f.InputChannel {
 		// We have a message from the outside world.
 		// Write it to the network.
-		f.WriteMessage(wave)
+		writeError := f.WriteMessage(wave)
+		if writeError != nil {
+			break
+		}
 	}
 }
 
-func (f File) pumpOutputStream() {
+func (f File[M]) pumpOutputStream() {
 	for {
 		wave, readError := f.ReadMessage()
 		if readError != nil {
 			break
 		}
 
-		f.OutputChannel <- wave
+		f.OutputChannel <- *wave
 	}
 }
 
-func (f File) cleanup() {
+func (f File[M]) cleanup() {
 	<-f.CloseChannel
 
-	f.inputStream.Close()
-	f.outputStream.Close()
+	_ = f.inputStream.Close()
+	_ = f.outputStream.Close()
 	close(f.InputChannel)
 	close(f.OutputChannel)
 	close(f.CloseChannel)

@@ -6,18 +6,18 @@ import (
 	"os/exec"
 )
 
-type Process struct {
-	factory MessageFactory
+type Process[M Message] struct {
+	factory MessageFactory[M]
 	cancel  context.CancelFunc
-	file    File
+	file    File[M]
 
-	InputChannel  chan Message
-	OutputChannel chan Message
+	InputChannel  chan M
+	OutputChannel chan M
 	CloseChannel  chan bool
 }
 
 // Exec attempts to start the resource as a separate process connected to us through stdin/stdout
-func Exec(factory MessageFactory, path string) (*Process, error) {
+func Exec[M Message](factory MessageFactory[M], path string) (*Process[M], error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resource := exec.CommandContext(ctx, path)
 	resourceInput, inputError := resource.StdinPipe()
@@ -37,20 +37,20 @@ func Exec(factory MessageFactory, path string) (*Process, error) {
 
 	file := NewFile(factory, resourceOutput, resourceInput)
 	closeChannel := make(chan bool)
-	process := Process{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
+	process := Process[M]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
 	go process.wait(resource)
 	go process.cleanup()
 
 	return &process, nil
 }
 
-func (p Process) wait(resource *exec.Cmd) {
-	resource.Wait()
+func (p Process[M]) wait(resource *exec.Cmd) {
+	_ = resource.Wait()
 
 	p.CloseChannel <- true
 }
 
-func (p Process) cleanup() {
+func (p Process[M]) cleanup() {
 	<-p.CloseChannel
 
 	p.cancel()
