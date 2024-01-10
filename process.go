@@ -17,9 +17,17 @@ type Process[Request Message, Response Message] struct {
 }
 
 // Exec attempts to start the resource as a separate process connected to us through stdin/stdout
-func Exec[Request Message, Response Message](factory MessageFactory[Response], path string) (*Process[Request, Response], error) {
+func Exec[Request Message, Response Message](factory MessageFactory[Response], args []string) (*Process[Request, Response], error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	resource := exec.CommandContext(ctx, path)
+
+	if len(args) == 0 {
+		return nil, errors.New("path not specified")
+	}
+
+	path := args[0]
+	args = args[1:]
+
+	resource := exec.CommandContext(ctx, path, args...)
 	resourceInput, inputError := resource.StdinPipe()
 	if inputError != nil {
 		return nil, inputError
