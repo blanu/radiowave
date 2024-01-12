@@ -31,6 +31,8 @@ func NewFile[Request Message, Response Message](factory MessageFactory[Response]
 }
 
 func NewFileFromFd[Request Message, Response Message](factory MessageFactory[Response], fd uintptr, logger *log.Logger) File[Request, Response] {
+	logger.Println("radiowave.NewFileFromFd")
+
 	f := os.NewFile(fd, "incoming")
 
 	return NewFile[Request, Response](factory, f, f, logger)
