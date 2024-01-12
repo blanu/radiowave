@@ -81,9 +81,11 @@ func (p Process[Request, Response]) pumpInputChannel() {
 	for request := range p.InputChannel {
 		p.logger.Printf("Process.pumpInputChannel() - received request: %v\n", request)
 
-		// We have a message from the outside world.
-		// Write it to the network.
-		response := p.file.Call(request)
+		p.file.InputChannel <- request
+		response := <-p.file.OutputChannel
+
+		p.logger.Printf("Process.pumpInputChannel() - sending response: %v\n", response)
+
 		p.OutputChannel <- response
 	}
 }
