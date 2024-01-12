@@ -3,6 +3,7 @@ package radiowave
 import (
 	"context"
 	"errors"
+	"log"
 	"os/exec"
 )
 
@@ -46,6 +47,7 @@ func Exec[Request Message, Response Message](factory MessageFactory[Response], a
 	file := NewFile[Request, Response](factory, resourceOutput, resourceInput)
 	closeChannel := make(chan bool)
 	process := Process[Request, Response]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
+	go process.pumpInputChannel()
 	go process.wait(resource)
 	go process.cleanup()
 
@@ -69,6 +71,20 @@ func (p Process[Request, Response]) Call(request Request) Response {
 
 func (p Process[Request, Response]) Close() {
 	p.CloseChannel <- true
+}
+
+func (p Process[Request, Response]) pumpInputChannel() {
+	// Read all the messages from the outside world.
+	log.Printf("Process.pumpInputChannel()\n")
+
+	for request := range p.InputChannel {
+		log.Printf("Process.pumpInputChannel() - received request: %v\n", request)
+
+		// We have a message from the outside world.
+		// Write it to the network.
+		response := p.file.Call(request)
+		p.OutputChannel <- response
+	}
 }
 
 func (p Process[Request, Response]) wait(resource *exec.Cmd) {
