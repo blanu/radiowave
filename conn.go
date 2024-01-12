@@ -2,6 +2,7 @@ package radiowave
 
 import (
 	"encoding/binary"
+	"log"
 	"net"
 )
 
@@ -12,24 +13,25 @@ type Conn[Request Message, Response Message] struct {
 	InputChannel  chan Request
 	OutputChannel chan Response
 	CloseChannel  chan bool
+	logger        *log.Logger
 }
 
-func Dial[Request Message, Response Message](factory MessageFactory[Response], destination string) (*Conn[Request, Response], error) {
+func Dial[Request Message, Response Message](factory MessageFactory[Response], destination string, logger *log.Logger) (*Conn[Request, Response], error) {
 	network, dialError := net.Dial("tcp", destination)
 	if dialError != nil {
 		return nil, dialError
 	}
 
-	wrapped := newConn[Request, Response](factory, network)
+	wrapped := newConn[Request, Response](factory, network, logger)
 	return &wrapped, nil
 }
 
-func newConn[Request Message, Response Message](factory MessageFactory[Response], network net.Conn) Conn[Request, Response] {
+func newConn[Request Message, Response Message](factory MessageFactory[Response], network net.Conn, logger *log.Logger) Conn[Request, Response] {
 	inputChannel := make(chan Request)
 	outputChannel := make(chan Response)
 	closeChannel := make(chan bool)
 
-	conn := Conn[Request, Response]{factory, network, inputChannel, outputChannel, closeChannel}
+	conn := Conn[Request, Response]{factory, network, inputChannel, outputChannel, closeChannel, logger}
 
 	go conn.pumpInputChannel()
 	go conn.pumpNetwork()

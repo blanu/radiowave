@@ -1,7 +1,6 @@
 package radiowave
 
 import (
-	"encoding/binary"
 	"io"
 	"log"
 	"os"
@@ -95,25 +94,7 @@ func (f File[Request, Response]) readMessage() (*Response, error) {
 func (f File[Request, Response]) writeMessage(message Request) error {
 	payload := message.ToBytes()
 
-	length := uint64(len(payload))
-	compressedBuffer := make([]byte, 8)
-	binary.BigEndian.PutUint64(compressedBuffer, length)
-
-	for len(compressedBuffer) > 0 {
-		if compressedBuffer[0] == 0 {
-			compressedBuffer = compressedBuffer[1:]
-		} else {
-			break
-		}
-	}
-
-	prefix := byte(len(compressedBuffer))
-	completeMessage := make([]byte, 0)
-	completeMessage = append(completeMessage, prefix)
-	completeMessage = append(completeMessage, compressedBuffer...)
-	completeMessage = append(completeMessage, payload...)
-
-	return fullWriteFile(f.outputStream, completeMessage)
+	return fullWriteFile(f.outputStream, payload)
 }
 
 // We need this to ensure that there are no short reads from the file.
