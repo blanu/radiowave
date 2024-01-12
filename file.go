@@ -3,6 +3,7 @@ package radiowave
 import (
 	"encoding/binary"
 	"io"
+	"log"
 	"os"
 )
 
@@ -13,14 +14,15 @@ type File[Request Message, Response Message] struct {
 	InputChannel  chan Request
 	OutputChannel chan Response
 	CloseChannel  chan bool
+	logger        *log.Logger
 }
 
-func NewFile[Request Message, Response Message](factory MessageFactory[Response], input io.ReadCloser, output io.WriteCloser) File[Request, Response] {
+func NewFile[Request Message, Response Message](factory MessageFactory[Response], input io.ReadCloser, output io.WriteCloser, logger *log.Logger) File[Request, Response] {
 	inputChannel := make(chan Request)
 	outputChannel := make(chan Response)
 	closeChannel := make(chan bool)
 
-	file := File[Request, Response]{factory, input, output, inputChannel, outputChannel, closeChannel}
+	file := File[Request, Response]{factory, input, output, inputChannel, outputChannel, closeChannel, logger}
 	go file.pumpInputChannel()
 	go file.pumpOutputStream()
 	go file.cleanup()
@@ -28,10 +30,10 @@ func NewFile[Request Message, Response Message](factory MessageFactory[Response]
 	return file
 }
 
-func NewFileFromFd[Request Message, Response Message](factory MessageFactory[Response], fd uintptr) File[Request, Response] {
+func NewFileFromFd[Request Message, Response Message](factory MessageFactory[Response], fd uintptr, logger *log.Logger) File[Request, Response] {
 	f := os.NewFile(fd, "incoming")
 
-	return NewFile[Request, Response](factory, f, f)
+	return NewFile[Request, Response](factory, f, f, logger)
 }
 
 func (f File[Request, Response]) Write(request Request) {

@@ -15,10 +15,11 @@ type Process[Request Message, Response Message] struct {
 	InputChannel  chan Request
 	OutputChannel chan Response
 	CloseChannel  chan bool
+	logger        *log.Logger
 }
 
 // Exec attempts to start the resource as a separate process connected to us through stdin/stdout
-func Exec[Request Message, Response Message](factory MessageFactory[Response], args []string) (*Process[Request, Response], error) {
+func Exec[Request Message, Response Message](factory MessageFactory[Response], args []string, logger *log.Logger) (*Process[Request, Response], error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if len(args) == 0 {
@@ -44,9 +45,9 @@ func Exec[Request Message, Response Message](factory MessageFactory[Response], a
 		return nil, errors.New("resource could not be started")
 	}
 
-	file := NewFile[Request, Response](factory, resourceOutput, resourceInput)
+	file := NewFile[Request, Response](factory, resourceOutput, resourceInput, logger)
 	closeChannel := make(chan bool)
-	process := Process[Request, Response]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel}
+	process := Process[Request, Response]{factory, cancel, file, file.InputChannel, file.OutputChannel, closeChannel, logger}
 	go process.pumpInputChannel()
 	go process.wait(resource)
 	go process.cleanup()
@@ -75,10 +76,10 @@ func (p Process[Request, Response]) Close() {
 
 func (p Process[Request, Response]) pumpInputChannel() {
 	// Read all the messages from the outside world.
-	log.Printf("Process.pumpInputChannel()\n")
+	p.logger.Printf("Process.pumpInputChannel()\n")
 
 	for request := range p.InputChannel {
-		log.Printf("Process.pumpInputChannel() - received request: %v\n", request)
+		p.logger.Printf("Process.pumpInputChannel() - received request: %v\n", request)
 
 		// We have a message from the outside world.
 		// Write it to the network.
